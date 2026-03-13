@@ -1,80 +1,413 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <title>访客通行证时间编辑</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>访客通行证</title>
   <style>
+    :root {
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: sans-serif;
-      text-align: center;
-      background-color: #eeeeee;
       margin: 0;
-      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0px 0px 0px;
+      background:
+        radial-gradient(circle at top, rgba(226, 237, 251, 0.92), rgba(212, 220, 241, 0.9) 52%, rgba(204, 209, 233, 0.96)),
+        linear-gradient(180deg, #eef3ff, #d8ddef);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
     }
-    .card {
-      position: relative;
-      display: inline-block;
-      width: 360px;
-      height: 730px;
+
+    .preview {
+      width: min(100%, 456px);
+      display: flex;
+      justify-content: center;
     }
-    .bg {
+
+    canvas {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
+      height: auto;
+      display: block;
+      border-radius: 28px;
+      box-shadow: 0 28px 48px rgba(67, 85, 132, 0.16);
+      background: #ffffff;
     }
-    .time-mask {
-      position: absolute;
-      top: 480px;
-      left: 180px;
-      width: 160px;
-      height: 70px;
-      background-color: #f9f9f9;
-      border-radius: 4px;
-    }
-    .time-text {
-      position: absolute;
-      top: 480px;
-      left: 185px;
-      font-size: 16px;
-      color: black;
-      font-weight: bold;
-      line-height: 1.3em;
-      text-align: center;
+
+    .fixed-footer {
+      position: fixed;
+      left: 50%;
+      bottom: max(4px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 10;
+      display: block;
+      pointer-events: none;
+      user-select: none;
+      height: auto;
     }
   </style>
 </head>
 <body>
-  <div class="card" id="card">
-    <img src="bg1.jpg" class="bg" alt="访客通行证" id="bgImg" />
-    <div class="time-mask"></div>
-    <div class="time-text" id="timeText"></div>
-  </div>
+    <main class="preview">
+    <canvas id="passCanvas" width="1206" height="2808" aria-label="访客通行证"></canvas>
+  </main>
+  <img class="fixed-footer" src="./footer-fixed.png" alt="" aria-hidden="true">
 
   <script>
-    // 本地时间格式化函数
-    function formatTime(date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      const hh = String(date.getHours()).padStart(2, '0');
-      const mm = String(date.getMinutes()).padStart(2, '0');
-      return `${y}-${m}-${d} ${hh}:${mm}`;
+    const canvas = document.getElementById("passCanvas");
+    const ctx = canvas.getContext("2d");
+    const fixedFooter = document.querySelector(".fixed-footer");
+
+    const bgImage = new Image();
+    const avatarImage = new Image();
+
+    bgImage.decoding = "async";
+    avatarImage.decoding = "async";
+
+    bgImage.src = "./bg.jpg";
+    avatarImage.src = "./zyx.jpg";
+
+    const FONT_STACK = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
+
+    function roundRectPath(context, x, y, width, height, radius) {
+      const r = Math.min(radius, width / 2, height / 2);
+      context.beginPath();
+      context.moveTo(x + r, y);
+      context.arcTo(x + width, y, x + width, y + height, r);
+      context.arcTo(x + width, y + height, x, y + height, r);
+      context.arcTo(x, y + height, x, y, r);
+      context.arcTo(x, y, x + width, y, r);
+      context.closePath();
     }
 
-    // 页面加载后更新时间文本
-    document.addEventListener('DOMContentLoaded', () => {
-      setInterval(() => {
-        const now = new Date();
+    function fillRoundRect(context, x, y, width, height, radius, fillStyle) {
+      context.save();
+      roundRectPath(context, x, y, width, height, radius);
+      context.fillStyle = fillStyle;
+      context.fill();
+      context.restore();
+    }
 
-        // 当前时间前1小时
-        const prev1h = new Date(now.getTime() - 1 * 60 * 60 * 1000);
-        // 当前时间后2小时
-        const next2h = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    function shadowCard(context, x, y, width, height, radius, fillStyle) {
+      context.save();
+      context.shadowColor = "rgba(111, 126, 166, 0.12)";
+      context.shadowBlur = 24;
+      context.shadowOffsetY = 8;
+      roundRectPath(context, x, y, width, height, radius);
+      context.fillStyle = fillStyle;
+      context.fill();
+      context.restore();
+    }
 
-        document.getElementById('timeText').innerHTML =
-          `${formatTime(prev1h)}<br>${formatTime(next2h)}`;
-      }, 1000);
+    function drawCircleImage(context, image, cx, cy, radius) {
+      const sourceWidth = image.width;
+      const sourceHeight = image.height;
+      const cropSize = sourceWidth;
+      const cropX = 0;
+      const cropY = Math.max(0, Math.min(sourceHeight - cropSize, 20));
+
+      context.save();
+      context.beginPath();
+      context.arc(cx, cy, radius, 0, Math.PI * 2);
+      context.closePath();
+      context.clip();
+      context.drawImage(
+        image,
+        cropX,
+        cropY,
+        cropSize,
+        cropSize,
+        cx - radius,
+        cy - radius,
+        radius * 2,
+        radius * 2
+      );
+      context.restore();
+    }
+
+    function drawClockIcon(context, x, y, size) {
+      context.save();
+      context.translate(x, y);
+      context.strokeStyle = "#68BFE0";
+      context.lineWidth = 4;
+      context.lineCap = "round";
+
+      context.beginPath();
+      context.arc(0, 0, size, 0, Math.PI * 2);
+      context.stroke();
+
+      context.beginPath();
+      context.moveTo(0, 0);
+      context.lineTo(0, -size * 0.48);
+      context.moveTo(0, 0);
+      context.lineTo(size * 0.42, 0);
+      context.stroke();
+
+      context.restore();
+    }
+
+    function drawArrow(context, x, y) {
+      context.save();
+      context.translate(x, y);
+      context.strokeStyle = "#B4B9C8";
+      context.lineWidth = 6;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.beginPath();
+      context.moveTo(-16, -22);
+      context.lineTo(8, 0);
+      context.lineTo(-16, 22);
+      context.stroke();
+      context.restore();
+    }
+
+    function formatDateLines(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+
+      return {
+        top: `${year}-${month}-`,
+        bottom: `${day} ${hours}:${minutes}`
+      };
+    }
+
+    function snapToHour(date) {
+      const normalized = new Date(date);
+      normalized.setMinutes(0, 0, 0);
+      return normalized;
+    }
+
+    function coverOriginalFooter(context) {
+      context.save();
+      context.fillStyle = "#FAFBFF";
+      context.fillRect(120, 2548, 966, 10);
+      context.fillStyle = "rgba(250, 251, 255, 0.98)";
+      context.fillRect(180, 2668, 846, 64);
+      context.restore();
+    }
+
+    function fitFontSize(context, text, startSize, minSize, maxWidth) {
+      for (let size = startSize; size >= minSize; size -= 1) {
+        context.font = `700 ${size}px ${FONT_STACK}`;
+        if (context.measureText(text).width <= maxWidth) {
+          return size;
+        }
+      }
+
+      return minSize;
+    }
+
+    function drawAvatarSection(context, timestamp) {
+      context.save();
+      context.fillStyle = "#FDFEFF";
+      context.fillRect(104, 350, 998, 560);
+      context.restore();
+
+      const centerX = 603;
+      const centerY = 566;
+      const dashOffset = -(timestamp * 0.08);
+
+      context.save();
+      context.strokeStyle = "#8BBEF9";
+      context.lineWidth = 5;
+      context.setLineDash([10, 13]);
+      context.lineDashOffset = dashOffset;
+      context.beginPath();
+      context.arc(centerX, centerY, 147, 0, Math.PI * 2);
+      context.stroke();
+      context.setLineDash([]);
+
+      context.fillStyle = "#FFFFFF";
+      context.beginPath();
+      context.arc(centerX, centerY, 135, 0, Math.PI * 2);
+      context.fill();
+
+      context.fillStyle = "#DCEEFF";
+      context.strokeStyle = "#55A5F7";
+      context.lineWidth = 10;
+      context.beginPath();
+      context.arc(centerX, centerY, 124, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      context.restore();
+
+      drawCircleImage(context, avatarImage, centerX, centerY, 112);
+
+      context.save();
+      context.fillStyle = "#59A8F7";
+      context.beginPath();
+      context.arc(729, 458, 29, 0, Math.PI * 2);
+      context.fill();
+      context.lineWidth = 5;
+      context.strokeStyle = "#FFFFFF";
+      context.stroke();
+      context.strokeStyle = "#FFFFFF";
+      context.lineWidth = 4;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.beginPath();
+      context.arc(723, 464, 8, 0, Math.PI * 2);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(729, 458);
+      context.lineTo(740, 447);
+      context.moveTo(734, 447);
+      context.lineTo(740, 447);
+      context.lineTo(740, 453);
+      context.stroke();
+      context.restore();
+
+      context.save();
+      context.fillStyle = "#1C232C";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.font = `700 66px ${FONT_STACK}`;
+      context.fillText("詹潍轩", centerX, 800);
+      context.restore();
+    }
+
+    function drawInfoPanel(context) {
+      shadowCard(context, 130, 900, 945, 690, 28, "#FAFBFF");
+
+      const rows = [
+        { label: "访客姓名", value: "詹潍轩", y: 1012 },
+        { label: "车辆信息", value: "闽HD0092", y: 1181 },
+        { label: "进入校区", value: "旗山北区、旗山南区", y: 1350 },
+        { label: "访客单位", value: "福建理工大学", y: 1519 }
+      ];
+
+      rows.forEach((row) => {
+        fillRoundRect(context, 160, row.y - 28, 4, 56, 2, "#3FA8CD");
+
+        context.save();
+        context.fillStyle = "#7E8592";
+        context.textAlign = "left";
+        context.textBaseline = "middle";
+        context.font = `400 42px ${FONT_STACK}`;
+        context.fillText(row.label, 192, row.y);
+        context.restore();
+
+        context.save();
+        context.fillStyle = "#1D232C";
+        context.textAlign = "right";
+        context.textBaseline = "middle";
+        context.font = `700 54px ${FONT_STACK}`;
+        context.fillText(row.value, 1017, row.y);
+        context.restore();
+      });
+    }
+
+    function drawTimeBox(context, x, y, timeLines) {
+      const boxWidth = 320;
+      const boxHeight = 178;
+      shadowCard(context, x, y, boxWidth, boxHeight, 24, "#FFFFFF");
+      drawClockIcon(context, x + 38, y + boxHeight / 2, 15);
+
+      const topFontSize = 44;
+      const bottomFontSize = 44;
+
+      context.save();
+      context.fillStyle = "#2D3440";
+      context.textAlign = "left";
+      context.textBaseline = "top";
+      context.font = `700 ${topFontSize}px ${FONT_STACK}`;
+      context.fillText(timeLines.top, x + 72, y + 36);
+      context.font = `700 ${bottomFontSize}px ${FONT_STACK}`;
+      context.fillText(timeLines.bottom, x + 72, y + 98);
+      context.restore();
+    }
+
+    function drawTimePanel(context) {
+      const now = new Date();
+      const start = snapToHour(new Date(now.getTime() - 60 * 60 * 1000));
+      const end = snapToHour(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+
+      const startLines = formatDateLines(start);
+      const endLines = formatDateLines(end);
+
+      const panelGradient = context.createLinearGradient(104, 1660, 1102, 1660);
+      panelGradient.addColorStop(0, "#F2F7FF");
+      panelGradient.addColorStop(1, "#F6F2FE");
+      fillRoundRect(context, 140, 1660, 920, 390, 32, panelGradient);
+
+      context.save();
+      context.fillStyle = "#16A0D6";
+      context.textAlign = "left";
+      context.textBaseline = "middle";
+      context.font = `700 40px ${FONT_STACK}`;
+      context.fillText("通行时间", 200, 1740);
+      context.restore();
+
+      drawTimeBox(context, 196, 1802, startLines);
+      drawArrow(context, 603, 1891);
+      drawTimeBox(context, 688, 1802, endLines);
+    }
+
+    let animationFrameId = null;
+
+    function render(timestamp = 0) {
+      if (!bgImage.complete || !avatarImage.complete) {
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+      drawAvatarSection(ctx, timestamp);
+      drawInfoPanel(ctx);
+      drawTimePanel(ctx);
+      coverOriginalFooter(ctx);
+    }
+
+    function startAnimation() {
+      if (animationFrameId !== null) {
+        return;
+      }
+
+      const animate = (timestamp) => {
+        render(timestamp);
+        animationFrameId = window.requestAnimationFrame(animate);
+      };
+
+      animationFrameId = window.requestAnimationFrame(animate);
+    }
+
+    function syncFixedFooterScale() {
+      if (!fixedFooter || !fixedFooter.naturalWidth) {
+        return;
+      }
+
+      const scale = canvas.getBoundingClientRect().width / canvas.width;
+      fixedFooter.style.width = `${fixedFooter.naturalWidth * scale}px`;
+    }
+
+    function waitForImages() {
+      return Promise.all([
+        bgImage.decode ? bgImage.decode().catch(() => {}) : Promise.resolve(),
+        avatarImage.decode ? avatarImage.decode().catch(() => {}) : Promise.resolve()
+      ]).then(() => {
+        syncFixedFooterScale();
+        render(performance.now());
+        startAnimation();
+      });
+    }
+
+    bgImage.addEventListener("load", () => render(performance.now()));
+    avatarImage.addEventListener("load", () => render(performance.now()));
+    fixedFooter.addEventListener("load", syncFixedFooterScale);
+    window.addEventListener("load", waitForImages);
+    window.addEventListener("resize", () => {
+      syncFixedFooterScale();
+      render(performance.now());
     });
   </script>
 </body>
